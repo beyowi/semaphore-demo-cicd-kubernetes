@@ -16,7 +16,7 @@ blocks:
             - 'docker build --cache-from $DOCKER_REGISTRY_URL/demo:latest -t $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID .'
             - 'docker push $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID'
       secrets:
-        - name: docker credentials
+        - name: Docker Credentials
   - name: Test
     task:
       jobs:
@@ -33,7 +33,7 @@ blocks:
             - sem-service start postgres
             - 'docker run --net=host -it $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID npm run test'
       secrets:
-        - name: docker credentials
+        - name: Docker Credentials
       prologue:
         commands:
           - 'echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin'
@@ -48,4 +48,9 @@ blocks:
             - 'docker tag $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID $DOCKER_REGISTRY_URL/demo:latest'
             - 'docker push $DOCKER_REGISTRY_URL/demo:latest'
       secrets:
-        - name: docker credentials
+        - name: Docker Credentials
+promotions:
+  - name: Canary
+    pipeline_file: byw-deploy-canary-digitalocean.yml
+    auto_promote:
+      when: result = 'passed' and (branch = 'master' or tag =~ '^hotfix*')

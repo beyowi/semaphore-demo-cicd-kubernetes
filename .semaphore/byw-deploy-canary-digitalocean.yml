@@ -1,0 +1,63 @@
+version: v1.0
+name: Digital Ocean Canary
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+blocks:
+  - name: Push
+    task:
+      jobs:
+        - name: Image
+          commands:
+            - 'echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin'
+            - 'docker pull $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID'
+            - 'docker tag $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID registry.digitalocean.com/$REGISTRY_NAME/demo:$SEMAPHORE_WORKFLOW_ID'
+            - doctl auth init -t $DO_ACCESS_TOKEN
+            - doctl registry login
+            - 'docker push registry.digitalocean.com/$REGISTRY_NAME/demo:$SEMAPHORE_WORKFLOW_ID'
+      secrets:
+        - name: Digital Ocean Key
+        - name: Docker Credentials
+      env_vars:
+        - name: REGISTRY_NAME
+          value: beyowi
+  - name: Deploy
+    task:
+      secrets:
+        - name: Digital Ocean DB Params
+        - name: Digital Ocean Key
+      env_vars:
+        - name: CLUSTER_NAME
+          value: semaphore-demo-cicd-kubernetes
+        - name: REGISTRY_NAME
+          value: beyowi
+        - name: CANARY_PODS
+          value: '1'
+        - name: STABLE_PODS
+          value: '2'
+      jobs:
+        - name: Image
+          commands:
+            - doctl auth init --access-token $DO_ACCESS_TOKEN
+            - 'doctl kubernetes cluster kubeconfig save "${CLUSTER_NAME}"'
+            - doctl registry kubernetes-manifest | kubectl apply -f -checkout
+            - kubectl apply -f manifests/service.yml
+            - './apply.sh manifests/deployment.yml addressbook-canary $CANARY_PODS registry.digitalocean.com/$REGISTRY_NAME/demo:$SEMAPHORE_WORKFLOW_ID'
+            - if kubectl get deployment addressbook-stable; then kubectl scale --replicas=$STABLE_PODS deployment/addressbook-stable; fi
+  - name: Functional tests
+    task:
+      secrets:
+        - name: Digital Ocean Key
+      env_vars:
+        - name: CLUSTER_NAME
+          value: semaphore-demo-cicd-kubernetes
+      jobs:
+        - name: Test and migrate
+          commands:
+            - doctl auth init --access-token $DO_ACCESS_TOKEN
+            - 'doctl kubernetes cluster kubeconfig save "${CLUSTER_NAME}"'
+            - doctl registry kubernetes-manifest | kubectl apply -f -checkout
+            - POD=$(kubectl get pod -l deployment=addressbook-canary -o name | head -n 1)
+            - kubectl exec -it "$POD" -- npm run ping
+            - kubectl exec -it "$POD" -- npm run migrate
