@@ -12,6 +12,9 @@ blocks:
           commands:
             - checkout
             - 'echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin'
+            - 'docker pull $DOCKER_REGISTRY_URL/demo:latest || true'
+            - 'docker build --cache-from $DOCKER_REGISTRY_URL/demo:latest -t $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID .'
+            - 'docker push $DOCKER_REGISTRY_URL/demo:$SEMAPHORE_WORKFLOW_ID'
       secrets:
         - name: docker credentials
   - name: Test
