@@ -53,4 +53,4 @@ promotions:
   - name: Canary
     pipeline_file: byw-deploy-canary-digitalocean.yml
     auto_promote:
-      when: result = 'passed' and (branch = 'master' or tag =~ '^hotfix*')
+      when: result = 'passed' and (branch = 'setup-semaphore' or tag =~ '^hotfix*')
